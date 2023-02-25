@@ -23,20 +23,26 @@ namespace mpregloh
 
             string requestBody = await new StreamReader(req.Body).ReadToEndAsync();
             dynamic data = JsonConvert.DeserializeObject(requestBody);
+            
+            string _userid = null;
+            string _productid = null;
+            _userid = _userid ?? data?.userId;
+            _productid = _productid ?? data?.productId;
+
             name = name ?? data?.name;
 
             string responseMessage = string.IsNullOrEmpty(name)
                 ? "This HTTP triggered function executed successfully. Pass a name in the query string or in the request body for a personalized response."
                 : $"Hello, {name}. This HTTP triggered function executed successfully.";
 
-            if (string.IsNullOrEmpty(name))  {
+            if (string.IsNullOrEmpty(_productid))  {
 
                 return new BadRequestResult(); 
             } 
             else
 
                 {
-                    responseMessage = "Hello, {name}. This HTTP triggered function executed successfully.";
+                    responseMessage = $"Hello, {_productid}. This HTTP triggered function executed successfully.";
                 return new OkObjectResult(responseMessage);
                 
 
