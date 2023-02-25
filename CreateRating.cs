@@ -7,50 +7,60 @@ using Microsoft.Azure.WebJobs.Extensions.Http;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
+using System.Net.Http;
 
 namespace mpregloh
 {
     public static class CreateRating
     {
+        private static readonly HttpClient _httpClient = new HttpClient();
+
         [FunctionName("CreateRating")]
         public static async Task<IActionResult> Run(
-            [HttpTrigger(AuthorizationLevel.Function, "get", "post", Route = null)] HttpRequest req,
+            [HttpTrigger(AuthorizationLevel.Function, "post", Route = null)] HttpRequest req,
+            [CosmosDB(databaseName: "mpregloh", collectionName: "mpregloh",
+                        ConnectionStringSetting = "CosmosDbConnectionString")] IAsyncCollector<RatingModel> icecreamRatingOut,
             ILogger log)
         {
             log.LogInformation("C# HTTP trigger function processed a request.");
 
-            string name = req.Query["name"];
-
-            string requestBody = await new StreamReader(req.Body).ReadToEndAsync();
-            dynamic data = JsonConvert.DeserializeObject(requestBody);
-            
-            string _userid = null;
+           string _userid = null;
             string _productid = null;
+
+            var requestBody = await new StreamReader(req.Body).ReadToEndAsync();
+            dynamic data = JsonConvert.DeserializeObject(requestBody);
+
             _userid = _userid ?? data?.userId;
             _productid = _productid ?? data?.productId;
 
-            name = name ?? data?.name;
+            var result = await _httpClient.GetAsync($"https://serverlessohuser.trafficmanager.net/api/GetUser/?userid={_userid}");
+            var resultContent = await result.Content.ReadAsStringAsync();
 
-            string responseMessage = string.IsNullOrEmpty(name)
-                ? "This HTTP triggered function executed successfully. Pass a name in the query string or in the request body for a personalized response."
-                : $"Hello, {name}. This HTTP triggered function executed successfully.";
+            if (result.IsSuccessStatusCode)
+            {
+                var resultProduct = await _httpClient.GetAsync($"https://serverlessohproduct.trafficmanager.net/api/GetProduct?productId={_productid}");
+                var resultProductContent = await result.Content.ReadAsStringAsync();
 
-            if (string.IsNullOrEmpty(_productid))  {
-
-                return new BadRequestResult(); 
-            } 
-            else
-
+                if (resultProduct.IsSuccessStatusCode)
                 {
-                    responseMessage = $"Hello, {_productid}. This HTTP triggered function executed successfully.";
-                return new OkObjectResult(responseMessage);
-                
+                    var newRatingGuid = Guid.NewGuid().ToString();
+                    var _icecreamRating = new RatingModel
+                    {
+                        id = newRatingGuid,
+                        userId = _userid,
+                        productId = _productid,
+                        locationName = data?.locationName,
+                        rating = data?.rating,
+                        userNotes = data?.userNotes,
+                        timeStamp = DateTime.Now.ToString()
+                    };
 
+                    await icecreamRatingOut.AddAsync(_icecreamRating);
+                    return new OkObjectResult(newRatingGuid);
                 }
+            }
 
-
-            
-
+            return new BadRequestResult();
 
         }
     }
